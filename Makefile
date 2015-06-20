@@ -43,6 +43,7 @@ All commands
 > make compile-sass       # Setup the sass watcher, to compile CSS
 > make stop-sass-watcher  # If the watcher is running in the background, stop it
 > make clean              # Delete all created images and containers
+> make demo               # Build a demo on ubuntu.qa
 
 (To understand commands in more details, simply read the Makefile)
 
@@ -112,6 +113,22 @@ rebuild-app-image:
 clean:
 	-docker rm -f ${SASS_CONTAINER}
 	-docker rmi -f ${APP_IMAGE}
+
+##
+# Build a demo on ubuntu.qa
+##
+demo:
+	${MAKE} build-app-image
+	$(eval current_branch := `git rev-parse --abbrev-ref HEAD`)
+	$(eval image_location := "ubuntudesign/${APP_IMAGE}:${current_branch}")
+	docker tag -f ${APP_IMAGE} ${image_location}
+	docker push ${image_location}
+	ssh dokku@ubuntu.qa deploy-image ${image_location} ${PROJECT_NAME}-${current_branch}
+	@echo ""
+	@echo "==="
+	@echo "Demo built: http://${PROJECT_NAME}-${current_branch}.ubuntu.qa/"
+	@echo "==="
+	@echo ""
 
 ##
 # "make it so" alias for "make run" (thanks @karlwilliams)
