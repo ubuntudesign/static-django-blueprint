@@ -43,6 +43,7 @@ All commands
 > make compile-sass       # Setup the sass watcher, to compile CSS
 > make stop-sass-watcher  # If the watcher is running in the background, stop it
 > make clean              # Delete all created images and containers
+> make demo               # Build a demo on ubuntu.qa
 
 (To understand commands in more details, simply read the Makefile)
 
@@ -85,7 +86,10 @@ run-app-image:
 # Create or start the sass container, to rebuild sass files when there are changes
 ##
 watch-sass:
-	docker attach ${SASS_CONTAINER} || docker start -a ${SASS_CONTAINER} || docker run --name ${SASS_CONTAINER} -v `pwd`:/app ubuntudesign/sass sass --debug-info --watch /app/static/css
+	$(eval is_running := `docker inspect --format="{{ .State.Running }}" ${SASS_CONTAINER} 2>/dev/null || echo "missing"`)
+	@if [[ "${is_running}" == "true" ]]; then docker attach ${SASS_CONTAINER}; fi
+	@if [[ "${is_running}" == "false" ]]; then docker start -a ${SASS_CONTAINER}; fi
+	@if [[ "${is_running}" == "missing" ]]; then docker run --name ${SASS_CONTAINER} -v `pwd`:/app ubuntudesign/sass sass --debug-info --watch /app/static/css; fi
 
 ##
 # Force a rebuild of the sass files
@@ -103,15 +107,32 @@ stop-sass-watcher:
 # Re-create the app image (e.g. to update dependencies)
 ##
 rebuild-app-image:
-	-docker rmi -f ${APP_IMAGE}
+	-docker rmi -f ${APP_IMAGE} 2> /dev/null
 	${MAKE} build-app-image
 
 ##
 # Delete all created images and containers
 ##
 clean:
-	-docker rm -f ${SASS_CONTAINER}
-	-docker rmi -f ${APP_IMAGE}
+	@echo "Removing images and containers:"
+	@docker rm -f ${SASS_CONTAINER} 2>/dev/null && echo "${SASS_CONTAINER} removed" || echo "Sass container not found: Nothing to do"
+	@docker rmi -f ${APP_IMAGE} 2>/dev/null && echo "${APP_IMAGE} removed" || echo "App image not found: Nothing to do"
+
+##
+# Build a demo on ubuntu.qa
+##
+demo:
+	${MAKE} build-app-image
+	$(eval current_branch := `git rev-parse --abbrev-ref HEAD`)
+	$(eval image_location := "ubuntudesign/${APP_IMAGE}:${current_branch}")
+	docker tag -f ${APP_IMAGE} ${image_location}
+	docker push ${image_location}
+	ssh dokku@ubuntu.qa deploy-image ${image_location} ${PROJECT_NAME}-${current_branch}
+	@echo ""
+	@echo "==="
+	@echo "Demo built: http://${PROJECT_NAME}-${current_branch}.ubuntu.qa/"
+	@echo "==="
+	@echo ""
 
 ##
 # "make it so" alias for "make run" (thanks @karlwilliams)
