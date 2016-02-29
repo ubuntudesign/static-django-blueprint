@@ -9,3 +9,4 @@ templates/static/css/styles.css
 *.css.map
 bzr-repo/
 django-error.log
+node_modules/
