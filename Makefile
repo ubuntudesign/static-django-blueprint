@@ -1,20 +1,15 @@
-SHELL := /bin/bash  # Use bash syntax
-
-# Settings
-# ===
-
-# Default port for the dev server - can be overridden e.g.: "PORT=1234 make run"
-ifeq ($(PORT),)
-	# ** CHANGE THIS **
-	PORT=8099
-endif
-
-# Settings
-# ===
-# ** CHANGE THE PROJECT NAME **
+# Settings - CHANGE ME
 PROJECT_NAME=django-blueprint
-APP_IMAGE=${PROJECT_NAME}
-SASS_CONTAINER=${PROJECT_NAME}-sass
+DEFAULT_PORT=8099
+
+export COMPOSE_PROJECT_NAME ?= $(shell echo $(subst _,,$(subst -,,$(shell basename `pwd`))) | tr A-Z a-z)
+export COMPOSE_FILE ?= docker-compose.makefile.yml
+export PORT ?= $(DEFAULT_PORT)
+
+DOCKER_IP := 127.0.0.1
+ifdef DOCKER_HOST
+	DOCKER_IP := $(shell echo ${DOCKER_HOST} | perl -nle'print $$& if m{(\d+\.){3}\d+}')
+endif
 
 # Help text
 # ===
@@ -35,90 +30,47 @@ All commands
 ---
 
 > make help               # This message
-> make run                # build, watch-sass and run-app-image
+> make run                # build, watch-sass and run-site (in background)
+> make logs               # watch the logs for the site
+> make clean-images       # Delete all created images and containers
+> make clean-css          # Delete compiled css
+> make clean-npm          # Delete node_modules
+> make clean-all          # Run all clean commands
 > make it so              # a fun alias for "make run"
-> make build-app-image    # Build the docker image
-> make run-app-image      # Use Docker to run the website
-> make watch-sass         # Setup the sass watcher, to compile CSS
-> make compile-sass       # Setup the sass watcher, to compile CSS
-> make stop-sass-watcher  # If the watcher is running in the background, stop it
-> make clean              # Delete all created images and containers
 
 (To understand commands in more details, simply read the Makefile)
 
 endef
 
-##
-# Print help text
-##
 help:
 	$(info ${HELP_TEXT})
 
-##
-# Use docker to run the sass watcher and the website
-##
 run:
-	${MAKE} build-app-image
-	${MAKE} watch-sass &
-	${MAKE} run-app-image
+	docker-compose up -d
+	@echo "==\nServer running at: http://${DOCKER_IP}:${PORT}\n=="
 
-##
-# Build the docker image
-##
-build-app-image:
-	docker build -t ${APP_IMAGE} .
+logs:
+	docker-compose logs
 
-##
-# Run the Django site using the docker image
-##
-run-app-image:
-	$(eval docker_ip := `hash boot2docker 2> /dev/null && echo "\`boot2docker ip\`" || echo "127.0.0.1"`)
+stop:
+	docker-compose kill
 
-	@echo ""
-	@echo "======================================="
-	@echo "Running server on http://${docker_ip}:${PORT}"
-	@echo "======================================="
-	@echo ""
-	docker run -p ${PORT}:5000 -v `pwd`:/app -w=/app ${APP_IMAGE}
+clean-images:
+	docker-compose kill
+	docker-compose rm -f
+	docker rmi -f ${COMPOSE_PROJECT_NAME}_web || true
 
-##
-# Create or start the sass container, to rebuild sass files when there are changes
-##
-watch-sass:
-	docker attach ${SASS_CONTAINER} || docker start -a ${SASS_CONTAINER} || docker run --name ${SASS_CONTAINER} -v `pwd`:/app ubuntudesign/sass sass --debug-info --watch /app/static/css
+clean-css:
+	docker-compose run sass find static/css -name '*.css' -exec rm {} \;
+	docker-compose run sass rm -rf /tmp/*;
 
-##
-# Force a rebuild of the sass files
-##
-compile-sass:
-	docker run -v `pwd`:/app ubuntudesign/sass sass --debug-info --update /app/static/css --force
+clean-npm:
+	docker-compose run npm rm -rf node_modules
 
-##
-# If the watcher is running in the background, stop it
-##
-stop-sass-watcher:
-	docker stop ${SASS_CONTAINER}
+clean-all:
+	${MAKE} clean-css
+	${MAKE} clean-npm
+	${MAKE} clean-images
 
-##
-# Re-create the app image (e.g. to update dependencies)
-##
-rebuild-app-image:
-	-docker rmi -f ${APP_IMAGE}
-	${MAKE} build-app-image
-
-##
-# Delete all created images and containers
-##
-clean:
-	-docker rm -f ${SASS_CONTAINER}
-	-docker rmi -f ${APP_IMAGE}
-
-##
-# "make it so" alias for "make run" (thanks @karlwilliams)
-##
 it:
 so: run
-
-# Phony targets (don't correspond to files or directories)
-all: help build run run-app-image watch-sass compile-sass stop-sass-watcher rebuild-app-image it so
-.PHONY: all

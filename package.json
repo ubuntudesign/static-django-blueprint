@@ -1,0 +1,14 @@
+{
+  "name": "canonical-django-site",
+  "version": "0.0.1",
+  "description": "A Django-based website by the Canonical Webteam",
+  "keywords": [
+    "website",
+    "ubuntu"
+  ],
+  "author": "Canonical webteam",
+  "license": "LGPL v3",
+  "dependencies": {
+    "ubuntu-vanilla-theme": "0.0.17"
+  }
+}
